@@ -1,0 +1,136 @@
+/*
+* Below, we can see the functions “sendSMS,” which uses the function “URLEncode” below 
+* it to translate the message “NEED HELP COME ASAP” that we inputted in the void loop 
+* function, and sends it to the ThingSpeak app channel we created that is then linked 
+* to Twilio to send us the message. 
+*/
+
+void sendSMS(String number, String message) { 
+    // Make a TCP connection to remote host   
+    if (client.connect(server, 80)) 
+    { 
+        //should look like this... 
+        //api.thingspeak.com/apps/thinghttp/send_request?api_key={api key}&number={send  to  number}&message={text    body}  
+        
+        client.print("GET   /apps/thinghttp/send_request?api_key="  ) ; 
+        client.print(apiKey); 
+        client.print("&number=");     
+        client.print(number); 
+        client.print ("&message=") ;     
+        client.print(message); 
+        client.println("HTTP/1.1") ; 
+        client.print("Host: ") ; 
+        client.println(server); 
+        client.println("Connection: close"); 
+        client.println(); 
+    } 
+    else 
+    { 
+        Serial.println(F("Connection failed"));   }  
+    
+    // Check for a response from the server, and route it 
+    // out  the  serial   port.  
+    while (client.connected())   { 
+        if ( client.available() ) 
+        { 
+            char c = client.read(); 
+            Serial.print(c); 
+        }       
+    } 
+    Serial.println () ; 
+    client.stop(); 
+} 
+
+String URLEncode(const char* msg) 
+{ 
+    const char *hex  =  "0123456789abcdef"; 
+    String encodedMsg = ""; 
+    
+    while (* msg != '\0'  ){ 
+        if(  ('a' <= *msg && *msg <= 'z') 
+               || ('A' <= *msg && *msg <= 'Z') 
+               ||  ( '0'  <=  *msg  &&  *msg  <=  '9')  )  { 
+            encodedMsg  +=  *msg;  
+        }  
+        else { 
+            encodedMsg += '%'; 
+            encodedMsg += hex[  *msg  >>  4] ; 
+            encodedMsg += hex[*msg & 15]; 
+        } 
+        msg++; 
+    } 
+    return encodedMsg; 
+}
+
+
+/*
+* And the code below in “loop” was used to read all of the various sensors for input and 
+* checked for the specified conditions needed to call on the “sendSMS” function and call 
+* for the SMS emergency bail out text to be sent. 
+*/
+
+void loop() {
+    int button_read = digitalRead(button);      
+    
+    if(button_read == HIGH){ //If button is pressed, send a message
+        Serial.println("Sending SMS");        
+        int reading = digitalRead(button);
+        if (button_read == HIGH) {
+            //delay(200);
+            if (button_read == HIGH) {
+                if (state == HIGH) {
+                    state = LOW;
+                } else {
+                    state = HIGH;
+                }
+                digitalWrite(light, state);
+                //send the sms 
+                sendSMS(sendNumber, URLEncode("NEED HELP COME ASAP")); 
+                previous = button_read;
+            }
+        }
+    } else {
+        digitalWrite(light, LOW);
+    }
+    
+    
+    //photosensor trigger
+    if (analogRead(photoPin) > 200) { //If photosensor detects light, send a message
+        Serial.println("Sending SMS");        
+        //delay(200);
+        digitalWrite(light, HIGH);
+        //send the sms 
+        sendSMS(sendNumber, URLEncode("NEED HELP COME ASAP")); 
+        
+    } else {
+        digitalWrite(light, LOW);
+    }
+    
+    //acclerometer trigger
+    
+    if (analogRead(xPin) > 500 || analogRead(yPin) > 500 || analogRead(zPin) > 500) {
+        Serial.println("Sending SMS");        
+        delay(200);
+        digitalWrite(light, HIGH);
+        //send the sms 
+        sendSMS(sendNumber, URLEncode("NEED HELP COME ASAP")); 
+        
+    } else {
+        digitalWrite(light, LOW);
+    } 
+}
+
+
+/*
+* We originally worked for the majority of the week to program the Arduino to connect 
+* to MatLab in order to set up a speech-activated buzzer to send the texts, but we 
+* ran into several problems. First, the Wifi libraries used by our Arduino Uno code to
+* connect to ThingSpeak and Twilio were not supported by the MatLab Arduino support 
+* packages. To resolve this issue, we then tried to program one Arduino Uno to be connected
+* to the MatLab code, and then use bluetooth to link it to another Arduino Uno with Wifi. 
+* However, the library “SoftwareSerial” that Arduino uses to read in bluetooth signals 
+* conflicted with the Wifi libraries. So instead, we resolved to use a set of various 
+* sensors instead on an Arduino Uno and WIfi Shield to send our text messages, but with more
+* with time, we ideally would’ve liked to utilize speech recognition as our SMS emergency text
+* trigger.
+*/
